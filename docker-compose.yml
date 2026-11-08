@@ -1,0 +1,42 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aegython-smart-guardian-api:latest
+    container_name: slg-api
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).status==200 else 1)"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  ui:
+    image: python:3.11-slim
+    container_name: slg-ui
+    working_dir: /app
+    volumes:
+      - ./frontend:/app/frontend:ro
+      - ./requirements.txt:/app/requirements.txt:ro
+    environment:
+      - API_URL=http://api:8000
+      - PYTHONUNBUFFERED=1
+    command: >
+      sh -c "pip install --no-cache-dir -q streamlit requests &&
+             streamlit run frontend/dashboard.py
+               --server.port=8501
+               --server.address=0.0.0.0
+               --server.headless=true
+               --browser.gatherUsageStats=false"
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
